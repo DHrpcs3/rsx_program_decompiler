@@ -2,8 +2,8 @@
 #include "rsx_fp_ucode.h"
 #include "rsx_vp_ucode.h"
 #include <vector>
-#include <unordered_set>
 #include <unordered_map>
+#include <set>
 #include <cstring>
 
 namespace rsx
@@ -34,6 +34,11 @@ namespace rsx
 			return rhs.name == name;
 		}
 
+		bool operator<(const texture_info& rhs) const
+		{
+			return id == rhs.id ? name < rhs.name : id < rhs.id;
+		}
+
 		std::size_t hash() const
 		{
 			return std::hash<std::string>{}(name);
@@ -48,6 +53,11 @@ namespace rsx
 		bool operator==(const constant_info& rhs) const
 		{
 			return rhs.name == name;
+		}
+
+		bool operator<(const constant_info& rhs) const
+		{
+			return id == rhs.id ? name < rhs.name : id < rhs.id;
 		}
 
 		std::size_t hash() const
@@ -66,6 +76,11 @@ namespace rsx
 		bool operator==(const register_info& rhs) const
 		{
 			return rhs.name == name;
+		}
+
+		bool operator<(const register_info& rhs) const
+		{
+			return id == rhs.id ? name < rhs.name : id < rhs.id;
 		}
 
 		std::size_t hash() const
@@ -219,9 +234,9 @@ namespace rsx
 		const raw_shader *raw;
 		decompile_language code_language;
 
-		std::unordered_set<constant_info, hasher> constants;
-		std::unordered_set<texture_info, hasher> textures;
-		std::unordered_set<register_info, hasher> temporary_registers;
+		std::set<constant_info> constants;
+		std::set<texture_info> textures;
+		std::set<register_info> temporary_registers;
 		std::uint32_t input_attributes = 0;
 		std::uint32_t output_attributes = 0;
 

@@ -5,6 +5,8 @@
 #include <algorithm>
 #include "../rsx_program_decompiler/endianness.h"
 
+static const std::string g_index_registers[2] = { "i", "j" };
+
 namespace rsx
 {
 	namespace fragment_program
@@ -108,6 +110,9 @@ namespace rsx
 					return input_attrib_names[index];
 				}
 			};
+
+			int m_index_register_index;
+			std::size_t m_end_offsets[2] = { ~0u, ~0u };
 
 		public:
 			struct instruction_t
@@ -430,11 +435,11 @@ namespace rsx
 						//result is fp16, clamp to fp16
 
 					case 1: //fp16
-						arg.assign(base::clamp(arg, -65536.0f, 65536.0f));
+						//arg.assign(base::clamp(arg, -65536.0f, 65536.0f));
 						break;
 
 					case 2: //fixed point 12
-						arg.assign(base::clamp(arg, -1.0f, 1.0f));
+						//arg.assign(base::clamp(arg, -1.0f, 1.0f));
 						break;
 
 					default:
@@ -629,6 +634,7 @@ namespace rsx
 				}
 
 				return base::max(base::abs(arg), expression_t<Type, Count>{ expr }) * base::sign(arg);
+				//return base::max(arg, expression_t<Type, Count>{ expr });
 			}
 
 			builder::expression_base_t decode_instruction()
@@ -662,8 +668,8 @@ namespace rsx
 				case (u32)opcode_t::kil: return conditional(typename base::void_expr{ "discard;" });
 				case (u32)opcode_t::pk4: return set_dst(base::pack_snorm_4x8(src(0)));
 				case (u32)opcode_t::up4: return set_dst(base::unpack_snorm_4x8(integer_t<1>::ctor(src(0).x())));
-				case (u32)opcode_t::ddx: return set_dst(base::ddx(src(0).xy()).xyxy(), disable_swizzle_as_dst);
-				case (u32)opcode_t::ddy: return set_dst(base::ddy(src(0).xy()).xyxy(), disable_swizzle_as_dst);
+				case (u32)opcode_t::ddx: return set_dst(base::ddx(src(0).xy()).xyxy());
+				case (u32)opcode_t::ddy: return set_dst(base::ddy(src(0).xy()).xyxy());
 				case (u32)opcode_t::tex: return set_dst(base::texture_fetch(texture_index(), texture_coords()), allow_bx2);
 				case (u32)opcode_t::txp: return set_dst(base::texture_fetch(texture_index(), texture_coords() / src(0).w()), allow_bx2);
 				case (u32)opcode_t::txd: return set_dst(base::texture_grad_fetch(texture_index(), texture_coords(), src(1), src(2)), allow_bx2);
@@ -740,12 +746,13 @@ namespace rsx
 					base::writer += typename base::writer_t
 					{
 						"for ("
-						"int i = " + std::to_string(instruction.data.src1.init_counter) + "; " +
-						"i < " + std::to_string(instruction.data.src1.end_counter) + "; " +
-						(instruction.data.src1.increment == 1 ? "i++" : "i += " + std::to_string(instruction.data.src1.increment)) +
+						"int " + g_index_registers[m_index_register_index] + " = " + std::to_string(instruction.data.src1.init_counter) + "; " +
+						g_index_registers[m_index_register_index] + " < " + std::to_string(instruction.data.src1.end_counter) + "; " +
+						g_index_registers[m_index_register_index] + (instruction.data.src1.increment == 1 ? "++" : " += " + std::to_string(instruction.data.src1.increment)) +
 						")\n{\n"
 					};
 
+					m_end_offsets[m_index_register_index++] = instruction.data.src2.end_offset >> 2;
 					base::writer.after(instruction.data.src2.end_offset >> 2, "}\n");
 					return{ "" };
 				case (u32)opcode_t::rep: return base::unimplemented("REP");
@@ -766,6 +773,16 @@ namespace rsx
 					{
 						context.is_next_is_constant = false;
 						continue;
+					}
+
+					for (int i = 0; i < 2; ++i)
+					{
+						if (index == m_end_offsets[i])
+						{
+							--m_index_register_index;
+							m_end_offsets[i] = ~0u;
+							break;
+						}
 					}
 
 					instruction = instructions[index].unpack();
